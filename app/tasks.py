@@ -4,6 +4,7 @@ Clave: task:{phone}. El numero de celular es el identificador de la tarea y, a
 la vez, el thread_id del grafo.
 """
 
+import time
 from datetime import datetime, timezone
 
 from redis.asyncio import Redis
@@ -61,3 +62,30 @@ async def marcar_aprobando(redis: Redis, phone: str) -> bool:
 async def revertir_a_espera(redis: Redis, phone: str, ttl: int) -> None:
     """Si no se pudo encolar la reanudacion, vuelve a WAITING_HUMAN."""
     await set_status(redis, phone, WAITING_HUMAN, ttl)
+
+
+# --------------------------------------------------------------------------- #
+# Indice de actividad por hilo
+#
+# El checkpointer de SQLite no tiene TTL propio (el de Redis si lo tenia), asi
+# que la expiracion de conversaciones inactivas se lleva aca: un sorted set con
+# el timestamp de la ultima actividad de cada numero. No se puede usar el TTL de
+# task:{phone} porque Redis borra esas claves en silencio y no se pueden
+# enumerar una vez vencidas.
+# --------------------------------------------------------------------------- #
+
+_CLAVE_ACTIVIDAD = "threads:activity"
+
+
+async def registrar_actividad(redis: Redis, phone: str) -> None:
+    await redis.zadd(_CLAVE_ACTIVIDAD, {phone: time.time()})
+
+
+async def hilos_vencidos(redis: Redis, ttl: int) -> list[str]:
+    """Numeros sin actividad desde hace mas de ttl segundos."""
+    return await redis.zrangebyscore(_CLAVE_ACTIVIDAD, 0, time.time() - ttl)
+
+
+async def olvidar_hilos(redis: Redis, phones: list[str]) -> None:
+    if phones:
+        await redis.zrem(_CLAVE_ACTIVIDAD, *phones)

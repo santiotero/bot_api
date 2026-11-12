@@ -34,6 +34,11 @@ class Settings(BaseSettings):
 
     SQLITE_PATH: str = "./app/vectorstore/data/watbot.db"
 
+    # Archivo aparte del de RAG a proposito: el checkpointer escribe en cada paso
+    # del grafo y compartir archivo lo pondria a competir por el lock de SQLite
+    # con las busquedas.
+    CHECKPOINT_PATH: str = "./app/vectorstore/data/checkpoints.db"
+
     # Se fija a proposito: el default de fastembed es /tmp/fastembed_cache, que
     # en Linux se vacia al reiniciar (y si /tmp es tmpfs, el modelo vive en RAM).
     EMBEDDING_CACHE_DIR: str = "./models"

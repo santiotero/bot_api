@@ -1,0 +1,3 @@
+# Los scripts se ejecutan en Linux: con CRLF fallan en el shebang
+# ("bad interpreter: bash^M"). Se fuerza LF sin importar core.autocrlf.
+*.sh text eol=lf

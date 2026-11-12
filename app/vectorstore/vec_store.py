@@ -88,6 +88,15 @@ def descargar_modelo() -> None:
     _construir_modelo(local_files_only=False)
 
 
+def _esta_en_cache() -> bool:
+    """True si el modelo ya se puede cargar sin red. Lo usa setup.sh."""
+    try:
+        _construir_modelo(local_files_only=True)
+        return True
+    except Exception:
+        return False
+
+
 def _encode_sync(textos: list[str], prefijo: str) -> list[list[float]]:
     modelo = _get_model()
     entradas = [prefijo + t for t in textos]

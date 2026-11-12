@@ -12,7 +12,10 @@ langchain-openai>=1.6,<2.0
 langchain-google-genai>=4.4,<5.0
 langchain-text-splitters>=1.1,<2.0
 langgraph>=1.2,<2.0
-langgraph-checkpoint-redis>=0.5,<1.0
+# Checkpoints en SQLite y no en Redis: langgraph-checkpoint-redis exige los
+# modulos RediSearch y RedisJSON, que el redis-server de Ubuntu no incluye.
+# Redis sigue usandose para la cola ARQ, que no necesita modulos.
+langgraph-checkpoint-sqlite>=2.0,<3.0
 
 sqlite-vec>=0.1.9,<0.2
 # fastembed (onnxruntime) en lugar de sentence-transformers: ~60 MB de runtime

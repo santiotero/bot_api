@@ -7,10 +7,12 @@ Dos funciones encolables:
 
 import logging
 import uuid
+from pathlib import Path
 
+from arq import cron
 from arq.connections import RedisSettings
 from langchain_core.messages import HumanMessage
-from langgraph.checkpoint.redis.aio import AsyncRedisSaver
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.types import Command
 from redis.asyncio import Redis
 
@@ -58,6 +60,8 @@ async def _finalizar(ctx: dict, phone: str, resultado: dict) -> None:
 async def execute_task(ctx: dict, phone: str, message: str, message_id: str | None = None) -> None:
     config, redis, grafo = ctx["config"], ctx["redis"], ctx["grafo"]
     await tasks.set_status(redis, phone, tasks.RUNNING, config.task_ttl_seconds)
+    # Marca el hilo como activo para que la limpieza periodica no lo expire.
+    await tasks.registrar_actividad(redis, phone)
 
     try:
         # Si el catalogo esta vacio el supervisor nunca rutea al buscador: evita
@@ -103,6 +107,28 @@ async def reanudar_tarea(ctx: dict, phone: str, approved: bool, reason: str = ""
         await tasks.set_status(redis, phone, tasks.FAILED, config.task_ttl_seconds)
 
 
+async def limpiar_checkpoints(ctx: dict) -> None:
+    """Expira las conversaciones inactivas. Corre por cron, no en el camino del usuario.
+
+    El checkpointer de SQLite no tiene TTL propio: la antiguedad se consulta en
+    el indice de actividad de Redis y los hilos vencidos se borran por su API.
+    """
+    config, redis, checkpointer = ctx["config"], ctx["redis"], ctx["checkpointer"]
+
+    vencidos = await tasks.hilos_vencidos(redis, config.checkpoint_ttl_seconds)
+    if not vencidos:
+        return
+
+    for phone in vencidos:
+        try:
+            await checkpointer.adelete_thread(phone)
+        except Exception:
+            logger.exception("No se pudo borrar el checkpoint de %s", phone)
+
+    await tasks.olvidar_hilos(redis, vencidos)
+    logger.info("Checkpoints expirados por inactividad: %d", len(vencidos))
+
+
 async def startup(ctx: dict) -> None:
     settings = get_settings()
     config = get_config()
@@ -117,18 +143,18 @@ async def startup(ctx: dict) -> None:
     ctx["config"] = config
     ctx["redis"] = Redis.from_url(settings.REDIS_URL, decode_responses=True)
 
+    # Checkpoints en SQLite, no en Redis: el checkpointer de Redis exige los
+    # modulos RediSearch y RedisJSON, que el redis-server de Ubuntu no trae.
+    # Redis queda solo para la cola ARQ, que no necesita modulos.
+    Path(settings.CHECKPOINT_PATH).parent.mkdir(parents=True, exist_ok=True)
+
     # from_conn_string es un context manager: se entra a mano porque su ciclo de
     # vida es el del worker, no el de un bloque.
-    cm = AsyncRedisSaver.from_conn_string(
-        settings.REDIS_URL,
-        ttl={
-            "default_ttl": config.checkpoint_ttl_seconds // 60,  # la libreria usa minutos
-            "refresh_on_read": True,
-        },
-    )
+    cm = AsyncSqliteSaver.from_conn_string(settings.CHECKPOINT_PATH)
     checkpointer = await cm.__aenter__()
-    await checkpointer.asetup()
+    await checkpointer.setup()
     ctx["_checkpointer_cm"] = cm
+    ctx["checkpointer"] = checkpointer
 
     ctx["grafo"] = build_graph(build_client(settings, config), config, checkpointer)
     logger.info("Worker listo")
@@ -146,6 +172,8 @@ async def shutdown(ctx: dict) -> None:
 
 class WorkerSettings:
     functions = [execute_task, reanudar_tarea]
+    # Una vez por hora, en el minuto 7 para no coincidir con otros cron en punto.
+    cron_jobs = [cron(limpiar_checkpoints, minute=7)]
     on_startup = startup
     on_shutdown = shutdown
     redis_settings = RedisSettings.from_dsn(get_settings().REDIS_URL)
