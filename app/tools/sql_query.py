@@ -15,6 +15,7 @@ proposito: es un limite de seguridad y no debe poder ampliarse por config.
 
 import asyncio
 import re
+import time
 
 import sqlparse
 from sqlparse.sql import Statement
@@ -22,6 +23,14 @@ from sqlparse.sql import Statement
 TABLA_PERMITIDA = "catalog_items"
 LIMITE_FILAS = 10
 TIMEOUT_SEGUNDOS = 5
+
+# El sondeo de disponibilidad es mas corto que una consulta real: solo pregunta
+# si hay filas. Si la base no es alcanzable se paga este timeout completo.
+TIMEOUT_SONDEO = 3
+# ...y se paga una vez por minuto, no una vez por mensaje: cachear acota tanto
+# el costo cuando la base no responde como los viajes a MySQL cuando si responde.
+# El precio es que un catalogo recien cargado tarda hasta un minuto en verse.
+CACHE_SONDEO_SEGUNDOS = 60
 
 # Solo palabras que podrian pasar las otras capas. Quedan fuera a proposito
 # terminos como user, database, version, set o call: no son SELECT o no
@@ -115,17 +124,34 @@ async def _ejecutar(sql: str) -> list[dict]:
         conexion.close()
 
 
+_sondeo_cache: tuple[float, bool] | None = None
+
+
 async def catalogo_tiene_filas() -> bool:
-    """Si la tabla esta vacia, el supervisor nunca rutea al buscador."""
+    """Si la tabla esta vacia o no es alcanzable, el supervisor no rutea al buscador.
+
+    Se consulta al inicio de cada mensaje, pero el resultado se cachea: el estado
+    del catalogo cambia con poca frecuencia y una base inalcanzable costaria el
+    timeout completo en cada mensaje.
+    """
+    global _sondeo_cache
+
+    ahora = time.monotonic()
+    if _sondeo_cache is not None and ahora - _sondeo_cache[0] < CACHE_SONDEO_SEGUNDOS:
+        return _sondeo_cache[1]
+
     try:
         filas = await asyncio.wait_for(
             _ejecutar(f"SELECT 1 FROM {TABLA_PERMITIDA} WHERE activo = 1 LIMIT 1"),
-            timeout=TIMEOUT_SEGUNDOS,
+            timeout=TIMEOUT_SONDEO,
         )
-        return bool(filas)
+        disponible = bool(filas)
     except Exception:
         # Sin acceso a la base el buscador no puede aportar: se trata como vacio.
-        return False
+        disponible = False
+
+    _sondeo_cache = (ahora, disponible)
+    return disponible
 
 
 async def sql_query(consulta_sql: str) -> str:
