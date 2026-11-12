@@ -15,7 +15,11 @@ langgraph>=1.2,<2.0
 # Checkpoints en SQLite y no en Redis: langgraph-checkpoint-redis exige los
 # modulos RediSearch y RedisJSON, que el redis-server de Ubuntu no incluye.
 # Redis sigue usandose para la cola ARQ, que no necesita modulos.
-langgraph-checkpoint-sqlite>=2.0,<3.0
+#
+# 3.1 como minimo: las 2.x llaman a aiosqlite.Connection.is_alive(), metodo que
+# aiosqlite elimino, y setup() aborta con AttributeError.
+langgraph-checkpoint-sqlite>=3.1,<4.0
+aiosqlite>=0.22,<1.0
 
 sqlite-vec>=0.1.9,<0.2
 # fastembed (onnxruntime) en lugar de sentence-transformers: ~60 MB de runtime
