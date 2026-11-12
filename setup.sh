@@ -29,10 +29,15 @@ ok "$($PY --version)"
 # --------------------------------------------------------------------------- #
 paso "2/5 Entorno virtual y dependencias"
 
-if [ ! -d .venv ]; then
+# Se chequea el activate y no el directorio: un intento fallido deja un .venv
+# incompleto, y darlo por bueno haria fallar el reintento de forma confusa.
+if [ ! -f .venv/bin/activate ]; then
+    [ -d .venv ] && { rm -rf .venv; aviso "se descarto un venv incompleto"; }
     "$PY" -m venv .venv || {
+        rm -rf .venv
         error "fallo la creacion del venv"
-        echo "    Suele faltar el paquete del venv:  sudo apt install -y python3.12-venv"
+        echo "    Falta el paquete del venv:  sudo apt install -y python3.12-venv"
+        echo "    Despues volver a correr ./setup.sh"
         exit 1
     }
     ok "venv creado"
