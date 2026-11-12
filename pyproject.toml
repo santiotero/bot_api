@@ -1,0 +1,8 @@
+[project]
+name = "watbot-api"
+version = "0.1.0"
+description = "Sistema de IA multi-agente para WhatsApp"
+requires-python = ">=3.12"
+
+[tool.setuptools]
+packages = ["app"]

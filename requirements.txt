@@ -1,0 +1,24 @@
+# Versiones pineadas a la linea mayor verificada en desarrollo.
+# langchain 1.x movio y deprecio modulos respecto de 0.3: no usar >=0.3.
+fastapi>=0.162,<1.0
+uvicorn[standard]>=0.54,<1.0
+arq>=0.28,<1.0
+redis>=5.3,<6.0
+pydantic>=2.13,<3.0
+pydantic-settings[dotenv]>=2.16,<3.0
+
+langchain-core>=1.6,<2.0
+langchain-openai>=1.6,<2.0
+langchain-google-genai>=4.4,<5.0
+langchain-text-splitters>=1.1,<2.0
+langgraph>=1.2,<2.0
+langgraph-checkpoint-redis>=0.5,<1.0
+
+sqlite-vec>=0.1.9,<0.2
+# fastembed (onnxruntime) en lugar de sentence-transformers: ~60 MB de runtime
+# contra ~2,5 GB de torch, y el modelo se carga en dos procesos (API y worker).
+# e5-small se registra a mano con add_custom_model (requiere >=0.6).
+fastembed>=0.9,<1.0
+sqlparse>=0.6,<1.0
+aiomysql>=0.3,<1.0
+httpx>=0.28,<1.0
