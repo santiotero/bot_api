@@ -6,7 +6,7 @@
   "k_semantico": 4,
   "k_lexical": 4,
   "ensemble_weights": [0.5, 0.5],
-  "score_threshold": 0.80,
+  "score_threshold": 0.75,
   "chunk_size": 700,
   "chunk_overlap": 100,
   "embedding_model": "intfloat/multilingual-e5-small",
