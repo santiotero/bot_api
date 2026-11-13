@@ -1,5 +1,5 @@
 {
-  "orden_proveedores": ["llamacpp", "gemini"],
+  "orden_proveedores": ["gemini", "llamacpp"],
   "max_intentos_llm": 3,
   "max_intentos_supervisor": 3,
   "max_iteraciones_react": 2,
